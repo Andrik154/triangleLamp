@@ -3,16 +3,16 @@ from __future__ import unicode_literals
 
 import json
 import logging
+import random
 from copy import copy
 
 from flask import Flask, request
 
 app=Flask(__name__)
 
-if __name__=='__main__':
-    app.run(debug=False, ssl_context=('../../etc/letsencrypt/live/andrik154.xyz/fullchain.pem','../../etc/letsencrypt/live/andrik154.xyz/privkey.pem'),threaded=True)
 
 logging.basicConfig(level=logging.DEBUG)
+
 ### vars ###
 colors={
     'красный':0xe31902,
@@ -56,31 +56,46 @@ colors={
     'белое':0xFFFFFF,
 }
 
+step=20
+minBrightness=200
+maxBrightness=20
+defaultBrightness=100
+
 lampMessage={
     "id":"01",
     "effect":"None",
     "color":0xFFFFFF,
-    "brightness":"None"
+    "brightness":100
 }
-brightness=0.7
+
 suggests = [{
             "title": "Включи красный свет",
             "hide":True
-},
+            },
             {
-                "title": "Включи радугу",
+                "title": "Включи радугу 🌈",
                 "hide":True
             },
             {
                 "title": "Увеличь яркость",
                 "hide":True
+            },
+            {
+                "title": "Включи голубую подсветку",
+                "hide": True
+            },
+            {
+                "title": "А включи фиолетовый",
+                "hide": True
             }
 ]
+
+
+
 ##############
 ### routes ###
 @app.route('/req',methods=['POST'])
 def get():
-
     response = {
         "version":request.json['version'],
         "session":request.json['session'],
@@ -111,15 +126,21 @@ def send():
 ################
 ### handlers ###
 def handler(req,res):
+    
+    #Shuffle suggests
+    random.shuffle(suggests)
 
+    #if new session = greeting
     if req['session']['new']:
         res['response']['text']='Добро пожаловать! Этот навык может управлять умной лампой Triangle. Вы можете: \n - Включать и выключать лампу \n - Включать эффекты (доступно: радуга) \n - Изменять цвет и яркость.'
         res['response']['buttons']=suggests
         return
-    
+
+    #if session already started = handling
+    brightness=lampMessage["brightness"]
     ou=req['request']['original_utterance'].lower()
     messageId=(req['session']['session_id']+'_'+str(req['session']['message_id']))
-    c=False
+    c=lampMessage['color']
     if ('помощь' in ou) or ('что ты умеешь' in ou):
         res['response']['text']='Этот навык может управлять умной лампой Triangle. Вы можете: \n - Включать и выключать лампу ("Включи/выключи лампу") \n - Включать эффекты ("Включи радугу") \n - Изменять цвет и яркость ("Включи синий свет", "Увеличь яркость") \n Приятного использования!'
         res['response']['buttons']=suggests
@@ -129,7 +150,7 @@ def handler(req,res):
             lampMessage['effect']='rainbow'
             res['response']['text']='Включаю радугу 🌈'
             res['response']['tts']='Включаю радугу'
-            turnOn(False, messageId, 'rainbow')
+            turnOn(c, messageId, "rainbow",brightness)
             return
         for i in ['лампу',
             'свет',
@@ -139,73 +160,87 @@ def handler(req,res):
                 for color in colors.keys():
                     if color in ou:
                         c=colors[color]
-                        turnOn(c, messageId,False)
                         res['response']['text']=f'Включаю {color} {i} 😉'
                         res['response']['tts']=f'Включаю {color} {i}!'
+                        turnOn(c, messageId,"std",brightness)
                         return
-                turnOn(c,messageId,False)
                 res['response']['text']=f'Включаю {i} 😉'
                 res['response']['tts']=f'Включаю {i}!'
-                return 
+                turnOn(c,messageId, lampMessage["effect"], brightness)
+                return
         for color in colors.keys():
             if color in ou:
                 c=colors[color]
-                turnOn(c, messageId,False)
-                res['response']['text']=f'Включаю 😉'
-                res['response']['tts']=f'Включаю'
+                res['response']['text']=f'Включаю {color} 😉'
+                res['response']['tts']=f'Включаю {color}'
+                turnOn(c, messageId,"std",brightness)
                 return
+
+        #if no entries after detecting "включи"
         res['response']['text']='Я не очень вас поняла. Может, попробуем еще раз?'
         res['response']['tts']='Я не очень вас поняла. Может, попробуем еще раз?'
         res['response']['buttons']=suggests
-        return
+        return   
     if any(i in ou for i in ('выключи','выключай','отключи','отключай','выруби','вырубай')):
-        c=0x000000
-        turnOn(c,messageId,False)
+        c=lampMessage['color']
+        turnOn(c,messageId,"off",brightness)
         res['response']['text']=f'Выключаю лампу'
         res['response']['tts']=f'Выключаю лампу'
         return
 
 
-    #u mean up, d mean down
+    #Brightness things
     if 'яркость' in ou:
+
+        #Increase brightness
         if any(i in ou for i in ('повысь','увеличь','добавь')):
-            res['response']['text']='Увеличиваю яркость'
-            res['response']['tts']='Увеличиваю яркость'
+            if brightness+step>maxBrightness:
+                res['response']['text']='Уже достигнут максимальный уровень яркости'
+                res['response']['tts']='Уже достигнут максимальный уровень яркости'
+                brightness+=0
+            else:
+                res['response']['text']='Увеличиваю яркость'
+                res['response']['tts']='Увеличиваю яркость'
+                brightness+=step
 
-            turnOn(c,messageId,False,brightness='u')
+            turnOn(c,messageId,lampMessage["effect"],brightness)
             return
+
+        #Decrease brightness
         if any(i in ou for i in ('понизь','уменьши','убавь')):
-            res['response']['text']='Уменьшаю яркость'
-            res['response']['tts']='Уменьшаю яркость'
-            turnOn(c,messageId,False,brightness='d')
+            if brightness-step<minBrightness:
+                res['response']['text']='Мы достигли минимальной яркости'
+                res['response']['tts']='Мы достигли минимальной яркости'
+                brightness-=0
+            else:
+                res['response']['text']='Уменьшаю яркость'
+                res['response']['tts']='Уменьшаю яркость'
+                brightness-=step
+
+            turnOn(c,messageId,lampMessage["effect"],brightness)
             return
 
+    #thanksgiving
     if 'спасибо' in ou:
         res['response']['text']='Вам спасибо <3'
         res['response']['tts']='Вам спасибо'
         return
-    
+
+    #if no entries occured
     res['response']['text']='Я не очень вас поняла. Может, попробуем еще раз?'
     res['response']['tts']='Я не очень вас поняла. Может, попробуем еще раз?'
     res['response']['buttons']=suggests
     return
 
 
-def turnOn(c,messageId,effect,**args):
+#Setting all the data
+def turnOn(c,messageId,effect,brightness):
     lampMessage['id']=messageId
-    lampMessage['brightness']="None"
-    lampMessage['effect']="None"
-    lampMessage['color']=c
-    if brightness=='u' or brightness=='d':
-        if brightness=='u':
-            lampMessage['brightness']="u"
-        if brightness=='d':
-            lampMessage['brightness']="d"
-        return
-    if (effect !="None"):
-        lampMessage['effect']='rainbow'
-        return
-        
+    lampMessage['brightness']=brightness
+    lampMessage['effect']=effect
     lampMessage['color']=c
     return
 
+#Starting prorgam
+if __name__=='__main__':
+    app.run(debug=False, ssl_context=('../../etc/letsencrypt/live/andrik154.xyz/fullchain.pem','../../etc/letsencrypt/live/andrik154.xyz/privkey.pem'),threaded=True)
