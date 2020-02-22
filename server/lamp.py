@@ -116,10 +116,10 @@ def handler(req,res):
         res['response']['text']='Добро пожаловать! Этот навык может управлять умной лампой Triangle. Вы можете: \n - Включать и выключать лампу \n - Включать эффекты (доступно: радуга) \n - Изменять цвет и яркость.'
         res['response']['buttons']=suggests
         return
-    
+
     ou=req['request']['original_utterance'].lower()
     messageId=(req['session']['session_id']+'_'+str(req['session']['message_id']))
-    c=False
+    c=lampMessage['color']
     if ('помощь' in ou) or ('что ты умеешь' in ou):
         res['response']['text']='Этот навык может управлять умной лампой Triangle. Вы можете: \n - Включать и выключать лампу ("Включи/выключи лампу") \n - Включать эффекты ("Включи радугу") \n - Изменять цвет и яркость ("Включи синий свет", "Увеличь яркость") \n Приятного использования!'
         res['response']['buttons']=suggests
@@ -129,7 +129,7 @@ def handler(req,res):
             lampMessage['effect']='rainbow'
             res['response']['text']='Включаю радугу 🌈'
             res['response']['tts']='Включаю радугу'
-            turnOn(False, messageId, 'rainbow')
+            turnOn(c, messageId, 'rainbow',"None")
             return
         for i in ['лампу',
             'свет',
@@ -139,18 +139,18 @@ def handler(req,res):
                 for color in colors.keys():
                     if color in ou:
                         c=colors[color]
-                        turnOn(c, messageId,False)
+                        turnOn(c, messageId,"None","None")
                         res['response']['text']=f'Включаю {color} {i} 😉'
                         res['response']['tts']=f'Включаю {color} {i}!'
                         return
-                turnOn(c,messageId,False)
+                turnOn(c,messageId, "None", "on")
                 res['response']['text']=f'Включаю {i} 😉'
                 res['response']['tts']=f'Включаю {i}!'
-                return 
+                return
         for color in colors.keys():
             if color in ou:
                 c=colors[color]
-                turnOn(c, messageId,False)
+                turnOn(c, messageId,"None","None")
                 res['response']['text']=f'Включаю 😉'
                 res['response']['tts']=f'Включаю'
                 return
@@ -159,8 +159,9 @@ def handler(req,res):
         res['response']['buttons']=suggests
         return
     if any(i in ou for i in ('выключи','выключай','отключи','отключай','выруби','вырубай')):
-        c=0x000000
-        turnOn(c,messageId,False)
+        c=lampMessage['color']
+        brightness="off"
+        turnOn(c,messageId,"None",brightness)
         res['response']['text']=f'Выключаю лампу'
         res['response']['tts']=f'Выключаю лампу'
         return
@@ -172,40 +173,34 @@ def handler(req,res):
             res['response']['text']='Увеличиваю яркость'
             res['response']['tts']='Увеличиваю яркость'
 
-            turnOn(c,messageId,False,brightness='u')
+            turnOn(c,messageId,"None",brightness='u')
             return
         if any(i in ou for i in ('понизь','уменьши','убавь')):
             res['response']['text']='Уменьшаю яркость'
             res['response']['tts']='Уменьшаю яркость'
-            turnOn(c,messageId,False,brightness='d')
+            turnOn(c,messageId,"None",brightness='d')
             return
 
     if 'спасибо' in ou:
         res['response']['text']='Вам спасибо <3'
         res['response']['tts']='Вам спасибо'
         return
-    
+
     res['response']['text']='Я не очень вас поняла. Может, попробуем еще раз?'
     res['response']['tts']='Я не очень вас поняла. Может, попробуем еще раз?'
     res['response']['buttons']=suggests
     return
 
 
-def turnOn(c,messageId,effect,**args):
+def turnOn(c,messageId,effect,brightness):
     lampMessage['id']=messageId
     lampMessage['brightness']="None"
     lampMessage['effect']="None"
     lampMessage['color']=c
-    if brightness=='u' or brightness=='d':
-        if brightness=='u':
-            lampMessage['brightness']="u"
-        if brightness=='d':
-            lampMessage['brightness']="d"
-        return
+    if brightness=='u' or brightness=='d' or brightness=='off' or brightness=='on':
+        lampMessage['brightness']=brightness
     if (effect !="None"):
         lampMessage['effect']='rainbow'
-        return
-        
-    lampMessage['color']=c
+    else:
+        lampMessage['color']=c
     return
-
