@@ -1,3 +1,5 @@
+#andrik154. MIT License
+
 from __future__ import unicode_literals
 # -*- coding: UTF-8 -*-
 
