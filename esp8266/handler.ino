@@ -1,4 +1,4 @@
-//andrik154. MIT License
+//andrik154
 
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
